@@ -143,7 +143,6 @@ public class FocusOverlayManager {
         setParameters(parameters);
         mListener = listener;
         setMirror(mirror);
-        mFocusDefault = true;
         mUI = ui;
     }
 
@@ -293,7 +292,7 @@ public class FocusOverlayManager {
             updateFocusUI();
             // If this is triggered by touch focus, cancel focus after a
             // while.
-            if (!mFocusDefault) {
+            if (mFocusArea != null) {
                 mHandler.sendEmptyMessageDelayed(RESET_TOUCH_FOCUS, RESET_TOUCH_FOCUS_DELAY);
             }
             if (shutterButtonPressed) {
@@ -364,12 +363,12 @@ public class FocusOverlayManager {
                 UsageStatistics.ACTION_TOUCH_FOCUS, x + "," + y);
 
         // Let users be able to cancel previous touch focus.
-        if ((!mFocusDefault) && (mState == STATE_FOCUSING ||
+        if ((mFocusArea != null) && (mState == STATE_FOCUSING ||
                     mState == STATE_SUCCESS || mState == STATE_FAIL)) {
             cancelAutoFocus();
         }
         if (mPreviewRect.width() == 0 || mPreviewRect.height() == 0) return;
-        mFocusDefault = false;
+        // Initialize variables.
         // Initialize mFocusArea.
         if (mFocusAreaSupported) {
             initializeFocusAreas(x, y);
@@ -499,7 +498,7 @@ public class FocusOverlayManager {
         // Show only focus indicator or face indicator.
 
         if (mState == STATE_IDLE) {
-            if (mFocusDefault) {
+            if (mFocusArea == null) {
                 mUI.clearFocus();
             } else {
                 // Users touch on the preview and the indicator represents the
