@@ -495,6 +495,7 @@ public class PhotoModule
     public void init(CameraActivity activity, View parent) {
         mActivity = activity;
         mRootView = parent;
+        mUI = new PhotoUI(activity, this, parent);
         mPreferences = new ComboPreferences(mActivity);
         CameraSettings.upgradeGlobalPreferences(mPreferences.getGlobal());
         mCameraId = getPreferredCameraId(mPreferences);
@@ -523,7 +524,6 @@ public class PhotoModule
             mOpenCameraThread = new OpenCameraThread();
             mOpenCameraThread.start();
         }
-        mUI = new PhotoUI(activity, this, parent);
         initializeControlByIntent();
         mQuickCapture = mActivity.getIntent().getBooleanExtra(EXTRA_QUICK_CAPTURE, false);
         mLocationManager = new LocationManager(mActivity, mUI);
@@ -1093,6 +1093,10 @@ public class PhotoModule
 
             if (needRestartPreview) {
                 setupPreview();
+                if (CameraUtil.FOCUS_MODE_CONTINUOUS_PICTURE.equals(
+                    mFocusManager.getFocusMode())) {
+                    mCameraDevice.cancelAutoFocus();
+                }
             }else if ((mReceivedSnapNum == mBurstSnapNum)
                         && (mCameraState != LONGSHOT)) {
                 mFocusManager.restartTouchFocusTimer();
@@ -1209,6 +1213,12 @@ public class PhotoModule
                 }
                 // Animate capture with real jpeg data instead of a preview frame.
                 if (!mBurstShotInProgress && mCameraState != LONGSHOT) {
+                    Size pic_size = mParameters.getPictureSize();
+                    if ((pic_size.width <= 352) && (pic_size.height <= 288)) {
+                        mUI.setDownFactor(2); //Downsample by 2 for CIF & below
+                    } else {
+                        mUI.setDownFactor(4);
+                    }
                     mUI.animateCapture(jpegData, orientation, mMirror,
                             (mSnapshotMode == CameraInfo.CAMERA_SUPPORT_MODE_ZSL) &&
                             (mSceneMode != CameraUtil.SCENE_MODE_HDR));
@@ -1714,7 +1724,12 @@ public class PhotoModule
         if (pressed && !canTakePicture()) return;
 
         if (pressed) {
-            mFocusManager.onShutterDown();
+            String timer = mPreferences.getString(
+                CameraSettings.KEY_TIMER,
+                mActivity.getString(R.string.pref_camera_timer_default));
+            if (timer.equals("0")) {
+                mFocusManager.onShutterDown();
+            }
         } else {
             // for countdown mode, we need to postpone the shutter release
             // i.e. lock the focus during countdown.
@@ -2272,10 +2287,6 @@ public class PhotoModule
                 !CameraUtil.useTimerForSceneDetection(mParameters)) {
             mCameraDevice.setMetadataCallback(mHandler, mASDCallback);
         }
-
-        // Set camera mode
-        CameraSettings.setVideoMode(mParameters, false);
-        mCameraDevice.setParameters(mParameters);
 
         } else if (mBurstShotsDone > 0) {
             mHandler.post(mDoSnapRunnable);
@@ -2860,8 +2871,6 @@ public class PhotoModule
 
             if ((updateSet & UPDATE_PARAM_INITIALIZE) != 0) {
                 updateCameraParametersInitialize();
-                // Set camera mode
-                CameraSettings.setVideoMode(mParameters, false);
             }
 
             if ((updateSet & UPDATE_PARAM_ZOOM) != 0) {
